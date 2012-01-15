@@ -1,0 +1,314 @@
+﻿// This is a Spec Explorer coordination script (Cord version 1.0).
+// Here is where you define configurations and machines describing the
+// exploration to be performed.
+
+using Yahtzee.Model;
+
+/// Contains actions of the model, bounds, and switches.
+config Main 
+{
+    /// The two implementation actions that will be modeled and tested
+    action abstract static void SUT.NewGame();
+    //action abstract static bool SUT.RollAll();
+    action abstract static bool SUT.RollAll(int i1, int i2, int i3, int i4, int i5);
+    action abstract static void SUT.ToggleOnHold(int i);
+    action abstract static int SUT.Score(ScoreType scoreType);
+
+
+    switch StateBound = 1280;
+    switch StepBound = 1280;
+    switch PathDepthBound = 1280;
+    switch TestClassBase = "vs";
+    switch GeneratedTestPath = "..\\Yahtzee.TestSuite";
+    switch GeneratedTestNamespace = "Yahtzee.TestSuite";
+    switch TestEnabled = false;
+    switch ForExploration = true;
+}
+
+config RollConstraint : Main
+{
+    action abstract static bool SUT.RollAll(int i1, int i2, int i3, int i4, int i5)
+        where{.
+            Condition.In(i1, 1, 2, 3, 4, 5, 6);
+            Condition.In(i2, 1, 2, 3, 4, 5, 6);
+            Condition.In(i3, 1, 2, 3, 4, 5, 6);
+            Condition.In(i4, 1, 2, 3, 4, 5, 6);
+            Condition.In(i5, 1, 2, 3, 4, 5, 6);
+        .};    
+}
+
+//It is explorable. However, it is not feasible to explore this machine 
+//due to the sheer number of states and steps. It has to be sliced.
+machine YahtzeeModel() : RollConstraint
+{
+    construct model program from RollConstraint
+}
+
+config FixedDice : Main
+{
+    action abstract static bool SUT.RollAll(int i1, int i2, int i3, int i4, int i5)
+        where{.
+            int[] values = new int[] { 1, 2, 3, 4, 5, 6 };
+            Condition.IsTrue(i1 == Probability.Choose(values));
+            Condition.IsTrue(i2 == Probability.Choose(values));
+            Condition.IsTrue(i3 == Probability.Choose(values));
+            Condition.IsTrue(i4 == Probability.Choose(values));
+            Condition.IsTrue(i5 == Probability.Choose(values));
+        .};     
+}
+
+//This machine is not useful either, since the combination of all the possible actions are also unmanageble.
+machine FixedDice() : FixedDice
+{
+    construct model program from FixedDice
+}
+
+//Roll test, should be ended after 3rd roll
+machine RollTest() : FixedDice
+{
+    (NewGame; RollAll*) || (construct model program from FixedDice)
+}
+
+config OnHoldTest : FixedDice
+{
+    action abstract static void SUT.ToggleOnHold(int i)
+        where i in {1..5};
+}
+
+//This machine , which will automatically ends after 3rd roll, 
+//is for ToggleOnHold testing. 
+machine OnHoldTest() : OnHoldTest
+{
+    (NewGame; (RollAll; ToggleOnHold*)*)
+    ||
+    (construct model program from OnHoldTest)
+}
+
+//Test to avoid hold all dice
+machine OnHoldConstraintTest() : OnHoldTest
+{
+    (NewGame; RollAll; ToggleOnHold(1); ToggleOnHold(2); ToggleOnHold(3); ToggleOnHold(4); RollAll; ToggleOnHold(5); RollAll)
+    ||
+    (construct model program from OnHoldTest)
+}
+
+//ScoreType tests. For each type except Chance, there are at least one path with result great than 0, and the other with result equal to 0.
+machine ScoreUpperSections() : RollConstraint
+{
+    (NewGame; (RollAll(1, 2, 3, 4, 5); (Score(ScoreType.One) | Score(ScoreType.Two) | Score(ScoreType.Three) | Score(ScoreType.Four) | Score(ScoreType.Five) | Score(ScoreType.Six))
+        | RollAll(6, 6, 6, 6, 6); (Score(ScoreType.One) | Score(ScoreType.Two) | Score(ScoreType.Three) | Score(ScoreType.Four) | Score(ScoreType.Five) | Score(ScoreType.Six)))) 
+    || (construct model program from RollConstraint)
+}
+
+machine ScoreThreeOfAKind() : RollConstraint
+{
+    (NewGame; (RollAll(_, _, 3, 3, 3); Score(ScoreType.ThreeOfAKind) | RollAll(2, 2, 1, 1, 3); Score(ScoreType.ThreeOfAKind))) || (construct model program from RollConstraint)
+}
+
+machine ScoreFourOfAKind() : RollConstraint
+{
+    (NewGame; (RollAll(_, 3, 3, 3, 3); Score(ScoreType.FourOfAKind) | RollAll(2, 2, 4, 4, 4); Score(ScoreType.FourOfAKind))) || (construct model program from RollConstraint)
+}
+
+machine ScoreSmallStraight() : RollConstraint
+{
+    (NewGame; (RollAll(1, 2, 3, 4, _); Score(ScoreType.SmallStraight) | RollAll(2, 3, 4, 5, _); Score(ScoreType.SmallStraight) | RollAll(3, 5, 6, 4, _); Score(ScoreType.SmallStraight) | RollAll(3, 1, 6, 4, 4); Score(ScoreType.SmallStraight))) || (construct model program from RollConstraint)
+}
+
+machine ScoreLargeStraight() : RollConstraint
+{
+    (NewGame; (RollAll(1, 3, 4, 2, 5); Score(ScoreType.LargeStraight) | RollAll(2, 5, 4, 3, 6); Score(ScoreType.LargeStraight) | RollAll(2, 3, 4, 3, 6); Score(ScoreType.LargeStraight))) || (construct model program from RollConstraint)
+}
+
+machine ScoreFullHouse() : RollConstraint
+{
+    (NewGame; (RollAll(2, 2, 3, 3, 3); Score(ScoreType.FullHouse) | RollAll(2, 2, 2, 1, 3); Score(ScoreType.FullHouse))) || (construct model program from RollConstraint)
+}
+
+machine ScoreChance() : RollConstraint
+{
+    (NewGame; RollAll(2, 5, _, _, _); Score(ScoreType.Chance)) || (construct model program from RollConstraint)
+}
+
+machine ScoreYahtzee() : RollConstraint
+{
+    (NewGame; RollAll(6, 6, 6, 6, _); Score(ScoreType.Yahtzee)) || (construct model program from RollConstraint)
+}
+
+//the last part of this machine is to test if the Yahtzee could 
+//be used as a wild card before upper section was filled. It should be ended with errors.
+machine ScoreWildCard() : RollConstraint
+{
+    (NewGame; RollAll(6, 6, 6, 6, 6); Score(ScoreType.Six); RollAll(6, 6, 6, 6, 6); Score(ScoreType.Yahtzee); 
+        RollAll(6, 6, 6, 6, 6); (Score(ScoreType.SmallStraight) | Score(ScoreType.LargeStraight));
+        RollAll(2, 2, 2, 2, 2); (Score(ScoreType.SmallStraight) | Score(ScoreType.LargeStraight)))
+    || (construct model program from RollConstraint)
+}
+
+//The complete precedure of the game without holds.
+//It's not feasible to be tested due to the huge combination of different ScoreTypes
+machine Game() : FixedDice
+{
+    (NewGame; (RollAll*; Score)*) || (construct model program from FixedDice)
+}
+
+//Test for a whole round without OnHold action
+machine OneRound() : FixedDice
+{
+    (NewGame; RollAll*; Score) || (construct model program from FixedDice)
+}
+
+//Test for a whole round with OnHold action
+machine OneRoundWithOnHold() : OnHoldTest
+{
+    (NewGame; (RollAll; ToggleOnHold*)*; Score) || (construct model program from OnHoldTest)
+}
+
+//Test for two round. Checks if the already scored type will not show in next round
+machine TwoRounds() : FixedDice
+{
+    (NewGame; (RollAll; Score){2}) || (construct model program from FixedDice)
+}
+
+//Test for highest score
+machine HighestScore() : RollConstraint
+{
+    (NewGame; RollAll(1, 1, 1, 1, 1); Score(ScoreType.Yahtzee); 
+        RollAll(1, 1, 1, 1, 1); Score(ScoreType.One);
+        RollAll(2, 2, 2, 2, 2); Score(ScoreType.Two);
+        RollAll(3, 3, 3, 3, 3); Score(ScoreType.Three);
+        RollAll(4, 4, 4, 4, 4); Score(ScoreType.Four);
+        RollAll(5, 5, 5, 5, 5); Score(ScoreType.Five);
+        RollAll(6, 6, 6, 6, 6); Score(ScoreType.Six);
+        RollAll(6, 6, 6, 6, 6); Score(ScoreType.ThreeOfAKind);
+        RollAll(6, 6, 6, 6, 6); Score(ScoreType.FourOfAKind);
+        RollAll(6, 6, 6, 6, 6); Score(ScoreType.FullHouse);
+        RollAll(6, 6, 6, 6, 6); Score(ScoreType.SmallStraight);
+        RollAll(6, 6, 6, 6, 6); Score(ScoreType.LargeStraight);
+        RollAll(6, 6, 6, 6, 6); Score(ScoreType.Chance)) 
+    || (construct model program from RollConstraint)
+}
+
+//Test for highest score without a single Yahtzee
+machine HighestScoreWithoutYahtzee() : RollConstraint
+{
+    (NewGame;
+        RollAll(1, 1, 1, 1, 2); Score(ScoreType.One);
+        RollAll(2, 2, 2, 2, 1); Score(ScoreType.Two);
+        RollAll(3, 3, 3, 3, 4); Score(ScoreType.Three);
+        RollAll(4, 4, 4, 4, 5); Score(ScoreType.Four);
+        RollAll(5, 5, 5, 5, 6); Score(ScoreType.Five);
+        RollAll(6, 6, 6, 6, 1); Score(ScoreType.Six);
+        RollAll(6, 6, 6, 6, 5); Score(ScoreType.ThreeOfAKind);
+        RollAll(6, 6, 6, 6, 5); Score(ScoreType.FourOfAKind);
+        RollAll(6, 6, 6, 5, 5); Score(ScoreType.FullHouse);
+        RollAll(1, 2, 3, 4, 6); Score(ScoreType.SmallStraight);
+        RollAll(1, 2, 3, 4, 5); Score(ScoreType.LargeStraight);
+        RollAll(6, 6, 6, 6, 5); Score(ScoreType.Chance);
+        RollAll(6, 6, 6, 6, 5); Score(ScoreType.Yahtzee)) 
+    || (construct model program from RollConstraint)
+}
+
+// ==================== Test suite ==============================
+machine TestSuite() : Main where TestEnabled = true
+{
+	  construct test cases where strategy = "shorttests" 
+	  for YahtzeeModel
+}
+
+machine TestSuiteForRollTest() : Main where TestEnabled = true
+{
+	  construct test cases where strategy = "shorttests" 
+	  for RollTest
+}
+
+machine TestSuiteForOnHoldTest() : Main where TestEnabled = true
+{
+	  construct test cases where strategy = "shorttests" 
+	  for OnHoldTest
+}
+
+machine TestSuiteForScoreUpperSections() : Main where TestEnabled = true
+{
+	  construct test cases where strategy = "shorttests" 
+	  for ScoreUpperSections
+}
+
+machine TestSuiteForScoreThreeOfAKind() : Main where TestEnabled = true
+{
+	  construct test cases where strategy = "shorttests" 
+	  for ScoreThreeOfAKind
+}
+
+machine TestSuiteForScoreFourOfAKind() : Main where TestEnabled = true
+{
+	  construct test cases where strategy = "shorttests" 
+	  for ScoreFourOfAKind
+}
+
+machine TestSuiteForScoreSmallStraight() : Main where TestEnabled = true
+{
+	  construct test cases where strategy = "shorttests" 
+	  for ScoreSmallStraight
+}
+
+machine TestSuiteForScoreLargeStraight() : Main where TestEnabled = true
+{
+	  construct test cases where strategy = "shorttests" 
+	  for ScoreLargeStraight
+}
+
+machine TestSuiteForScoreFullHouse() : Main where TestEnabled = true
+{
+	  construct test cases where strategy = "shorttests" 
+	  for ScoreFullHouse
+}
+
+machine TestSuiteForScoreChance() : Main where TestEnabled = true
+{
+	  construct test cases where strategy = "shorttests" 
+	  for ScoreChance
+}
+
+machine TestSuiteForScoreYahtzee() : Main where TestEnabled = true
+{
+	  construct test cases where strategy = "shorttests" 
+	  for ScoreYahtzee
+}
+
+machine TestSuiteForScoreWildCard() : Main where TestEnabled = true
+{
+	  construct test cases where strategy = "shorttests" 
+	  for ScoreWildCard
+}
+
+machine TestSuiteForOneRound() : Main where TestEnabled = true
+{
+	  construct test cases where strategy = "shorttests" 
+	  for OneRound
+}
+
+machine TestSuiteForOneRoundWithOnHold() : Main where TestEnabled = true
+{
+	  construct test cases where strategy = "shorttests" 
+	  for OneRoundWithOnHold
+}
+
+machine TestSuiteForTwoRounds() : Main where TestEnabled = true
+{
+	  construct test cases where strategy = "shorttests" 
+	  for TwoRounds
+}
+
+machine TestSuiteForHighestScore() : Main where TestEnabled = true
+{
+	  construct test cases where strategy = "shorttests" 
+	  for HighestScore
+}
+
+machine TestSuiteForHighestScoreWithoutYahtzee() : Main where TestEnabled = true
+{
+	  construct test cases where strategy = "shorttests" 
+	  for HighestScoreWithoutYahtzee
+}
+

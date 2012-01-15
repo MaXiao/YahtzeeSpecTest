@@ -1,0 +1,7 @@
+F:\Coding\practice\spec\Yahtzee\Yahtzee\bin\Debug\Yahtzee.dll
+F:\Coding\practice\spec\Yahtzee\Yahtzee\bin\Debug\Yahtzee.pdb
+F:\Coding\practice\spec\Yahtzee\Yahtzee\bin\Debug\Yahtzee.Sample.dll
+F:\Coding\practice\spec\Yahtzee\Yahtzee\bin\Debug\Yahtzee.Sample.pdb
+F:\Coding\practice\spec\Yahtzee\Yahtzee\obj\Debug\ResolveAssemblyReference.cache
+F:\Coding\practice\spec\Yahtzee\Yahtzee\obj\Debug\Yahtzee.dll
+F:\Coding\practice\spec\Yahtzee\Yahtzee\obj\Debug\Yahtzee.pdb

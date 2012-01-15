@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Views xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" Version="1.0">
+  <ViewList>
+    <ViewDefinition>
+      <Name>LongerTimeOut</Name>
+      <RenderingTimeOut>60</RenderingTimeOut>
+    </ViewDefinition>
+    <ViewDefinition>
+      <Name>ErrorPath</Name>
+      <ShowErrorPathsOnly>true</ShowErrorPathsOnly>
+    </ViewDefinition>
+  </ViewList>
+</Views>
